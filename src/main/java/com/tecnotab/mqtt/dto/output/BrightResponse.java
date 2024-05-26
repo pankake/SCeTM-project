@@ -71,7 +71,7 @@ public class BrightResponse implements Response {
 
         @DynamoDBTyped(DynamoDBMapperFieldModel.DynamoDBAttributeType.N)
         @DynamoDBAttribute(attributeName = "relevance")
-        public int getRelelevance() {
+        public int getRelevance() {
             return relevance;
         }
 

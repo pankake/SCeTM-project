@@ -9,7 +9,7 @@ import java.util.List;
 public class ComputeZoomService {
 
     public int getDynamicZoom(List<LatLng> coordinates, double avgLat, double avgLng) {
-        // Calcola il bounding box per determinare lo zoom dinamico
+        // calcola il bounding box per determinare lo zoom dinamico
         double maxLat = coordinates.stream().mapToDouble(coord -> coord.lat).max().orElse(avgLat);
         double minLat = coordinates.stream().mapToDouble(coord -> coord.lat).min().orElse(avgLat);
         double maxLng = coordinates.stream().mapToDouble(coord -> coord.lng).max().orElse(avgLng);
@@ -18,7 +18,7 @@ public class ComputeZoomService {
         double latDiff = maxLat - minLat;
         double lngDiff = maxLng - minLng;
 
-        // Determina lo zoom basato sulla differenza di latitudine e longitudine
+        // determina lo zoom basato sulla differenza di latitudine e longitudine
         int zoom = calculateZoom(latDiff, lngDiff);
         return zoom;
     }

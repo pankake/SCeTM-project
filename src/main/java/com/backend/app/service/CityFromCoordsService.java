@@ -1,5 +1,6 @@
 package com.backend.app.service;
 
+import com.backend.app.util.MapUtils;
 import com.google.maps.GeoApiContext;
 import com.google.maps.GeocodingApi;
 import com.google.maps.errors.ApiException;
@@ -9,15 +10,13 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 
-import static com.backend.app.util.MapUtils.GOOGLE_API_KEY;
-
 @Service
 public class CityFromCoordsService {
     private final GeoApiContext context;
 
     public CityFromCoordsService() {
         this.context = new GeoApiContext.Builder()
-                .apiKey(GOOGLE_API_KEY)
+                .apiKey(MapUtils.GOOGLE_API_KEY)
                 .build();
     }
 

@@ -1,19 +1,17 @@
 package com.backend.app.service;
 
-import com.google.maps.errors.ApiException;
-import com.google.maps.errors.InvalidRequestException;
-import com.google.maps.model.LatLng;
 import com.backend.app.dto.output.SoundResponse;
 import com.backend.app.dto.resource.SoundMapResource;
 import com.backend.app.dto.resource.StatsResource;
 import com.backend.app.dto.resource.alerts.SoundAlerts;
+import com.google.maps.errors.ApiException;
+import com.google.maps.errors.InvalidRequestException;
+import com.google.maps.model.LatLng;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static com.backend.app.dto.resource.alerts.SoundAlerts.AlertType.*;
 import static com.backend.app.util.MapUtils.*;
@@ -39,10 +37,10 @@ public class SoundDataService {
             double radius = determineRadiusAndAlertBasedOnDecibelLevel(point.getPayload().getDecibelLevel(),
                     soundMapResource, point);
 
-            // Define the color for the circle
-            String color = COLOR_PURPLE; // Hex color code for purple
+            // colore del cerchio
+            String color = COLOR_PURPLE;
 
-            // Generate a single filled circle
+            // genera il cerchio
             path.append("&path=fillcolor:0x").append(color).append("33|color:0x").append(color).append("FF|weight:1");
 
             List<LatLng> circlePoints = generateCircleAroundPoint(coord, radius);
@@ -51,7 +49,7 @@ public class SoundDataService {
             }
         }
 
-        // Calculate the center of the data points
+        // calcola il centro della mappa
         double avgLat = 0;
         double avgLng = 0;
         for (SoundResponse point : data) {
@@ -62,7 +60,7 @@ public class SoundDataService {
         avgLng /= data.size();
         LatLng center = new LatLng(avgLat, avgLng);
 
-        // Generate the static map URL
+        // genera l'url
         String mapUrl = STATIC_MAP_URL+ "?center=" +
                 center.lat + "," + center.lng +
                 "&zoom=14" +
@@ -77,14 +75,15 @@ public class SoundDataService {
     }
 
     private List<LatLng> generateCircleAroundPoint(LatLng center, double radius) {
-        // Generate a list of LatLng points forming a circle around the center point
+
+        // genera la lista di punti da usare per generare un cerchio attorno al punto centrale
         List<LatLng> points = new ArrayList<>();
-        int numPoints = 18; // Number of points to generate for the circle
+        int numPoints = 18; // numero di punti che compongono il cerchio
 
         for (int i = 0; i < numPoints; i++) {
             double angle = Math.toRadians((360.0 / numPoints) * i);
-            double latOffset = radius * Math.cos(angle) / 111320; // Approx conversion to degrees latitude
-            double lngOffset = radius * Math.sin(angle) / (111320 * Math.cos(Math.toRadians(center.lat))); // Approx conversion to degrees longitude
+            double latOffset = radius * Math.cos(angle) / 111320;
+            double lngOffset = radius * Math.sin(angle) / (111320 * Math.cos(Math.toRadians(center.lat)));
 
             points.add(new LatLng(center.lat + latOffset, center.lng + lngOffset));
         }
@@ -136,21 +135,7 @@ public class SoundDataService {
         return result;
     }
 
-    public StatsResource analyzeDaily(List<SoundResponse> soundResponses, int day, int month, int year) {
-        List<SoundResponse> filteredResponses = soundResponses.stream()
-                .filter(response -> {
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.setTimeInMillis(response.getSampleTime());
-                    return calendar.get(Calendar.DAY_OF_MONTH) == day &&
-                            calendar.get(Calendar.MONTH) == month - 1 &&
-                            calendar.get(Calendar.YEAR) == year;
-                })
-                .collect(Collectors.toList());
-
-        return calculateStatistics(filteredResponses);
-    }
-
-    private StatsResource calculateStatistics(List<SoundResponse> soundResponses) {
+    public StatsResource computeStatistics(List<SoundResponse> soundResponses) {
         StatsResource statistics = new StatsResource();
 
         if (soundResponses.isEmpty()) {
@@ -188,49 +173,5 @@ public class SoundDataService {
         statistics.setStandardDeviation(roundedStandardDeviation);
 
         return statistics;
-    }
-
-    public StatsResource analyzeWeekly(List<SoundResponse> soundResponses, int week, int year) {
-        List<SoundResponse> filteredResponses = soundResponses.stream()
-                .filter(response -> {
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.setTimeInMillis(response.getSampleTime());
-                    return calendar.get(Calendar.WEEK_OF_YEAR) == week &&
-                            calendar.get(Calendar.YEAR) == year;
-                })
-                .collect(Collectors.toList());
-
-        return calculateStatistics(filteredResponses);
-    }
-
-    public StatsResource analyzeSeasonally(List<SoundResponse> soundResponses, String season, int year) {
-        List<SoundResponse> filteredResponses = soundResponses.stream()
-                .filter(response -> {
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.setTimeInMillis(response.getSampleTime());
-                    int month = calendar.get(Calendar.MONTH);
-                    int responseYear = calendar.get(Calendar.YEAR);
-
-                    return responseYear == year && isInSeason(month, season);
-                })
-                .collect(Collectors.toList());
-
-        return calculateStatistics(filteredResponses);
-    }
-
-    private boolean isInSeason(int month, String season) {
-        switch (season.toLowerCase()) {
-            case "winter":
-                return month == Calendar.DECEMBER || month == Calendar.JANUARY || month == Calendar.FEBRUARY;
-            case "spring":
-                return month == Calendar.MARCH || month == Calendar.APRIL || month == Calendar.MAY;
-            case "summer":
-                return month == Calendar.JUNE || month == Calendar.JULY || month == Calendar.AUGUST;
-            case "autumn":
-            case "fall":
-                return month == Calendar.SEPTEMBER || month == Calendar.OCTOBER || month == Calendar.NOVEMBER;
-            default:
-                return false;
-        }
     }
 }

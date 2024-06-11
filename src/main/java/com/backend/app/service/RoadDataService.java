@@ -1,23 +1,25 @@
 package com.backend.app.service;
 
 import com.backend.app.dto.output.RoadResponse;
-import com.backend.app.util.MapUtils;
+import com.backend.app.dto.resource.RoadMapResource;
+import com.backend.app.dto.resource.alerts.RoadAlerts;
 import com.google.maps.DirectionsApi;
 import com.google.maps.DirectionsApiRequest;
 import com.google.maps.GeoApiContext;
 import com.google.maps.errors.ApiException;
 import com.google.maps.errors.InvalidRequestException;
 import com.google.maps.model.*;
-import com.backend.app.dto.resource.RoadMapResource;
-import com.backend.app.dto.resource.alerts.RoadAlerts;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static com.backend.app.dto.resource.alerts.RoadAlerts.AlertType.*;
+import static com.backend.app.util.MapUtils.*;
 
 @Service
 public class RoadDataService {
@@ -30,7 +32,7 @@ public class RoadDataService {
     public RoadDataService() {
         // inizializzazione del context
         this.context = new GeoApiContext.Builder()
-                .apiKey(MapUtils.GOOGLE_API_KEY)
+                .apiKey(GOOGLE_API_KEY)
                 .build();
     }
 
@@ -39,7 +41,7 @@ public class RoadDataService {
             throw new InvalidRequestException("Nessuna coordinata fornita");
         }
 
-        // Calcola il centro della mappa
+        // calcolo del centro della mappa
         double avgLat = 0;
         double avgLng = 0;
         for (LatLng coord : coordinates) {
@@ -50,13 +52,13 @@ public class RoadDataService {
         avgLng /= coordinates.size();
         LatLng center = new LatLng(avgLat, avgLng);
 
-        // Costruisci il parametro markers
+        // costruisce i markers
         StringBuilder markers = new StringBuilder();
         for (LatLng coord : coordinates) {
             markers.append("markers=color:red%7C").append(coord.lat).append(",").append(coord.lng).append("&");
         }
 
-        // Richiede le direzioni utilizzando le API Directions
+        // richiede le direzioni utilizzando l' API Directions
         DirectionsApiRequest directionsRequest = DirectionsApi.newRequest(context);
         directionsRequest.origin(coordinates.get(0));
         directionsRequest.destination(coordinates.get(coordinates.size() - 1));
@@ -65,7 +67,7 @@ public class RoadDataService {
 
         DirectionsResult directionsResult = directionsRequest.await();
 
-        // Estrai il percorso dalle direzioni ottenute
+        // estrae il percorso dalle direzioni ottenute
         List<LatLng> routeCoordinates = new ArrayList<>();
         for (DirectionsRoute route : directionsResult.routes) {
             for (DirectionsLeg leg : route.legs) {
@@ -86,13 +88,16 @@ public class RoadDataService {
         StringBuilder path = new StringBuilder("&path=color:").append(lastColor).append("|weight:5");
         StringBuilder currentUrl = new StringBuilder();
 
-        currentUrl.append(MapUtils.STATIC_MAP_URL+"?center=")
+        currentUrl.append(STATIC_MAP_URL+"?center=")
                 .append(center.lat).append(",").append(center.lng)
                 .append("&zoom=").append(computeZoomService.getDynamicZoom(coordinates, avgLat, avgLng))
-                .append("&size=").append(MapUtils.RESOLUTION)
+                .append("&size=").append(RESOLUTION)
                 .append("&scale=2&")
-                .append(markers.toString())
-                .append("&key=").append(MapUtils.GOOGLE_API_KEY);
+                .append(markers)
+                .append("&key=").append(GOOGLE_API_KEY);
+
+        // assicura che i dati non vengano considerati più volte nel percorso
+        Set<RoadResponse> addedAlerts = new HashSet<>();
 
         for (int i = 0; i < routeCoordinates.size() - 1; i++) {
             LatLng start = routeCoordinates.get(i);
@@ -100,6 +105,10 @@ public class RoadDataService {
             boolean matched = false;
 
             for (RoadResponse point : pointsToCheck) {
+                // evita di considerare punti già trovati sul percorso
+                if (addedAlerts.contains(point)) {
+                    continue;
+                }
                 if (coordinateIsOnRoute(point.getPayload().toLatLng(), List.of(start, end), tolerance)) {
                     String currentColor = determineColorAndAlertBasedOnAcceleration(point, roadMapResource, 1);
                     if (!currentColor.equals(lastColor)) {
@@ -107,6 +116,7 @@ public class RoadDataService {
                         lastColor = currentColor;
                     }
                     matched = true;
+                    addedAlerts.add(point);
                     break;
                 }
             }
@@ -119,19 +129,19 @@ public class RoadDataService {
             path.append("|").append(start.lat).append(",").append(start.lng);
             path.append("|").append(end.lat).append(",").append(end.lng);
 
-            // Check if the URL length exceeds the limit
-            if (currentUrl.length() + path.length() > MapUtils.MAX_URL_LENGTH) {
+            // controlla se l'url supera il limite di lunghezza
+            if (currentUrl.length() + path.length() > MAX_URL_LENGTH) {
                 currentUrl.append(path);
                 mapUrls.add(currentUrl.toString());
 
-                // Reset current URL and path
+                // reinizializza l'url e il path
                 currentUrl = new StringBuilder();
-                currentUrl.append(MapUtils.STATIC_MAP_URL+"?center=")
+                currentUrl.append(STATIC_MAP_URL+"?center=")
                         .append(center.lat).append(",").append(center.lng)
                         .append("&zoom=").append(computeZoomService.getDynamicZoom(coordinates, avgLat, avgLng))
-                        .append("&size=").append(MapUtils.RESOLUTION)
+                        .append("&size=").append(RESOLUTION)
                         .append("&scale=2&")
-                        .append("&key=").append(MapUtils.GOOGLE_API_KEY);
+                        .append("&key=").append(GOOGLE_API_KEY);
                 path = new StringBuilder("&path=color:").append(lastColor).append("|weight:5");
             }
         }
@@ -172,70 +182,14 @@ public class RoadDataService {
         return dist;
     }
 
-    public RoadMapResource colorRoadsNearDataPoints(List<RoadResponse> data, double tolerance) throws ApiException, InterruptedException, IOException {
-        if (data == null || data.isEmpty()) {
-            throw new InvalidRequestException("Nessun dato fornito");
-        }
-
-        RoadMapResource roadMapResource = new RoadMapResource();
-        List<RoadAlerts> alerts = new ArrayList<>();
-        roadMapResource.setAlerts(alerts);
-
-        StringBuilder path = new StringBuilder();
-
-        for (RoadResponse point : data) {
-            String color = determineColorAndAlertBasedOnAcceleration(point, roadMapResource, 2);
-            LatLng coord = point.getPayload().toLatLng();
-
-            // Define the fill and border color for the circle
-            String fillColor = color + "33"; // Add transparency to fill color
-            String borderColor = color + "FF"; // Solid border color
-
-            // Generate a single filled circle
-            path.append("&path=fillcolor:0x").append(fillColor)
-                    .append("|color:0x").append(borderColor).append("|weight:1");
-
-            List<LatLng> nearbyPoints = generateCircleAroundPoint(coord, tolerance);
-            for (LatLng nearbyPoint : nearbyPoints) {
-                path.append("|").append(nearbyPoint.lat).append(",").append(nearbyPoint.lng);
-            }
-        }
-
-        // Calculate the center of the data points
-        double avgLat = 0;
-        double avgLng = 0;
-        for (RoadResponse point : data) {
-            avgLat += point.getPayload().getLat();
-            avgLng += point.getPayload().getLng();
-        }
-        avgLat /= data.size();
-        avgLng /= data.size();
-        LatLng center = new LatLng(avgLat, avgLng);
-
-        // Generate the static map URL
-        String mapUrl = MapUtils.STATIC_MAP_URL+"?center=" +
-                center.lat + "," + center.lng +
-                "&zoom=14" +
-                "&size=" + MapUtils.RESOLUTION +
-                "&scale=2" +
-                path.toString() +
-                "&key=" + MapUtils.GOOGLE_API_KEY;
-
-        List<String> urls = new ArrayList<>();
-        urls.add(mapUrl);
-        roadMapResource.setUrls(urls);
-
-        return roadMapResource;
-    }
-
     private List<LatLng> generateCircleAroundPoint(LatLng center, double radius) {
         List<LatLng> circlePoints = new ArrayList<>();
-        int points = 18; // Number of points in the circle
+        int points = 18; // numero di punti che compongono il cerchio
 
         for (int i = 0; i < points; i++) {
             double angle = Math.toRadians((360.0 / points) * i);
-            double deltaLat = radius * Math.cos(angle) / 111320.0; // Approx conversion: 1 degree lat ≈ 111.32 km
-            double deltaLng = radius * Math.sin(angle) / (111320.0 * Math.cos(Math.toRadians(center.lat))); // Adjust for longitude
+            double deltaLat = radius * Math.cos(angle) / 111320.0;
+            double deltaLng = radius * Math.sin(angle) / (111320.0 * Math.cos(Math.toRadians(center.lat)));
 
             LatLng point = new LatLng(center.lat + deltaLat, center.lng + deltaLng);
             circlePoints.add(point);
@@ -255,17 +209,73 @@ public class RoadDataService {
             roadMapResource.getAlerts().add(new RoadAlerts(point.getPayload().getUid(), NOT_DAMAGED.getMessage(),
                     new LatLng(point.getPayload().getLat(),
                             point.getPayload().getLng()), magnitude, point.getPayload().getReliability(), point.getPayload().getRelevance()));
-            return apiType == 1 ? "green" : MapUtils.COLOR_GREEN;  // Strada in buono stato
+            return apiType == 1 ? "green" : COLOR_GREEN;  // strada in buono stato
         } else if (magnitude < 1.0) {
             roadMapResource.getAlerts().add(new RoadAlerts(point.getPayload().getUid(), PARTIALLY_DAMAGED.getMessage(),
                     new LatLng(point.getPayload().getLat(),
                             point.getPayload().getLng()), magnitude, point.getPayload().getReliability(), point.getPayload().getRelevance()));
-            return apiType == 1 ? "yellow" : MapUtils.COLOR_YELLOW;  // Strada parzialmente danneggiata
+            return apiType == 1 ? "yellow" : COLOR_YELLOW;  // strada parzialmente danneggiata
         } else {
             roadMapResource.getAlerts().add(new RoadAlerts(point.getPayload().getUid(), HIGHLY_DAMAGED.getMessage(),
                     new LatLng(point.getPayload().getLat(),
                             point.getPayload().getLng()), magnitude, point.getPayload().getReliability(), point.getPayload().getRelevance()));
-            return apiType == 1 ? "red" : MapUtils.COLOR_RED;  // Strada molto danneggiata
+            return apiType == 1 ? "red" : COLOR_RED;  // strada molto danneggiata
         }
+    }
+
+    public RoadMapResource colorRoadsNearDataPoints(List<RoadResponse> data, double tolerance) throws ApiException, InterruptedException, IOException {
+        if (data == null || data.isEmpty()) {
+            throw new InvalidRequestException("Nessun dato fornito");
+        }
+
+        RoadMapResource roadMapResource = new RoadMapResource();
+        List<RoadAlerts> alerts = new ArrayList<>();
+        roadMapResource.setAlerts(alerts);
+
+        StringBuilder path = new StringBuilder();
+
+        for (RoadResponse point : data) {
+            String color = determineColorAndAlertBasedOnAcceleration(point, roadMapResource, 2);
+            LatLng coord = point.getPayload().toLatLng();
+
+            // colori del cerchio
+            String fillColor = color + "33"; // trasparenza per il riempimento
+            String borderColor = color + "FF"; // colore del contorno
+
+            // genera il cerchio
+            path.append("&path=fillcolor:0x").append(fillColor)
+                    .append("|color:0x").append(borderColor).append("|weight:1");
+
+            List<LatLng> nearbyPoints = generateCircleAroundPoint(coord, tolerance);
+            for (LatLng nearbyPoint : nearbyPoints) {
+                path.append("|").append(nearbyPoint.lat).append(",").append(nearbyPoint.lng);
+            }
+        }
+
+        // calcola il centro della mappa
+        double avgLat = 0;
+        double avgLng = 0;
+        for (RoadResponse point : data) {
+            avgLat += point.getPayload().getLat();
+            avgLng += point.getPayload().getLng();
+        }
+        avgLat /= data.size();
+        avgLng /= data.size();
+        LatLng center = new LatLng(avgLat, avgLng);
+
+        // genera l'url per la mappa statica
+        String mapUrl = STATIC_MAP_URL+"?center=" +
+                center.lat + "," + center.lng +
+                "&zoom=14" +
+                "&size=" + RESOLUTION +
+                "&scale=2" +
+                path.toString() +
+                "&key=" + GOOGLE_API_KEY;
+
+        List<String> urls = new ArrayList<>();
+        urls.add(mapUrl);
+        roadMapResource.setUrls(urls);
+
+        return roadMapResource;
     }
 }

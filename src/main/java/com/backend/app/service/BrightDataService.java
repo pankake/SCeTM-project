@@ -1,19 +1,19 @@
 package com.backend.app.service;
 
 import com.backend.app.dto.output.BrightResponse;
+import com.backend.app.dto.resource.BrightMapResource;
+import com.backend.app.dto.resource.StatsResource;
 import com.backend.app.dto.resource.alerts.BrightAlerts;
-import com.backend.app.util.MapUtils;
 import com.google.maps.errors.ApiException;
 import com.google.maps.errors.InvalidRequestException;
 import com.google.maps.model.LatLng;
-import com.backend.app.dto.resource.BrightMapResource;
-import com.backend.app.dto.resource.StatsResource;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
-import java.util.stream.Collectors;
+
+import static com.backend.app.dto.resource.alerts.BrightAlerts.AlertType.*;
+import static com.backend.app.util.MapUtils.*;
 
 @Service
 public class BrightDataService {
@@ -35,7 +35,7 @@ public class BrightDataService {
             double radius = determineRadiusAndAlertBasedOnLuxLevel(point.getPayload().getLux(),
                     brightMapResource, point);
 
-            String color = MapUtils.COLOR_GOLD;
+            String color = COLOR_GOLD;
             
             path.append("&path=fillcolor:0x").append(color).append("33|color:0x").append(color).append("FF|weight:1");
 
@@ -45,7 +45,7 @@ public class BrightDataService {
             }
         }
 
-        // Calculate the center of the data points
+        // calcola il centro della mappa come la media tra le latitudini e long. dei punti
         double avgLat = 0;
         double avgLng = 0;
         for (BrightResponse point : data) {
@@ -56,14 +56,14 @@ public class BrightDataService {
         avgLng /= data.size();
         LatLng center = new LatLng(avgLat, avgLng);
 
-        // Generate the static map URL
-        String mapUrl = MapUtils.STATIC_MAP_URL+ "?center=" +
+        // genera l'url della mappa statica
+        String mapUrl = STATIC_MAP_URL+ "?center=" +
                 center.lat + "," + center.lng +
                 "&zoom=14" +
-                "&size=" + MapUtils.RESOLUTION +
+                "&size=" + RESOLUTION +
                 "&scale=2" +
                 path +
-                "&key=" + MapUtils.GOOGLE_API_KEY;
+                "&key=" + GOOGLE_API_KEY;
 
         brightMapResource.setUrl(mapUrl);
 
@@ -71,14 +71,14 @@ public class BrightDataService {
     }
 
     private List<LatLng> generateCircleAroundPoint(LatLng center, double radius) {
-        // Generate a list of LatLng points forming a circle around the center point
+        // genera una lista di punti per creare un cerchio attorno al punto centrale
         List<LatLng> points = new ArrayList<>();
-        int numPoints = 18; // Number of points to generate for the circle
+        int numPoints = 18; // numero di punti usati per generare il cerchio
 
         for (int i = 0; i < numPoints; i++) {
             double angle = Math.toRadians((360.0 / numPoints) * i);
-            double latOffset = radius * Math.cos(angle) / 111320; // Approx conversion to degrees latitude
-            double lngOffset = radius * Math.sin(angle) / (111320 * Math.cos(Math.toRadians(center.lat))); // Approx conversion to degrees longitude
+            double latOffset = radius * Math.cos(angle) / 111320;
+            double lngOffset = radius * Math.sin(angle) / (111320 * Math.cos(Math.toRadians(center.lat)));
 
             points.add(new LatLng(center.lat + latOffset, center.lng + lngOffset));
         }
@@ -91,15 +91,15 @@ public class BrightDataService {
                                                           BrightResponse point) {
 
         if(luxLevel < 100)
-            brightMapResource.getAlerts().add(new BrightAlerts(point.getPayload().getUid(), BrightAlerts.AlertType.DIMLY_LIT_AREA.getMessage(),
+            brightMapResource.getAlerts().add(new BrightAlerts(point.getPayload().getUid(), DIMLY_LIT_AREA.getMessage(),
                     new LatLng(point.getPayload().getLat(),
                             point.getPayload().getLng()), luxLevel, point.getPayload().getReliability(), point.getPayload().getRelevance()));
         else if(luxLevel < 500)
-            brightMapResource.getAlerts().add(new BrightAlerts(point.getPayload().getUid(), BrightAlerts.AlertType.MODERATELY_BRIGHT_AREA.getMessage(),
+            brightMapResource.getAlerts().add(new BrightAlerts(point.getPayload().getUid(), MODERATELY_BRIGHT_AREA.getMessage(),
                     new LatLng(point.getPayload().getLat(),
                             point.getPayload().getLng()), luxLevel, point.getPayload().getReliability(), point.getPayload().getRelevance()));
         else
-            brightMapResource.getAlerts().add(new BrightAlerts(point.getPayload().getUid(), BrightAlerts.AlertType.VERY_BRIGHT_AREA.getMessage(),
+            brightMapResource.getAlerts().add(new BrightAlerts(point.getPayload().getUid(), VERY_BRIGHT_AREA.getMessage(),
                     new LatLng(point.getPayload().getLat(),
                             point.getPayload().getLng()), luxLevel, point.getPayload().getReliability(), point.getPayload().getRelevance()));
 
@@ -130,21 +130,7 @@ public class BrightDataService {
         return result;
     }
 
-    public StatsResource analyzeDaily(List<BrightResponse> brightResponses, int day, int month, int year) {
-        List<BrightResponse> filteredResponses = brightResponses.stream()
-                .filter(response -> {
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.setTimeInMillis(response.getSampleTime());
-                    return calendar.get(Calendar.DAY_OF_MONTH) == day &&
-                            calendar.get(Calendar.MONTH) == month - 1 &&
-                            calendar.get(Calendar.YEAR) == year;
-                })
-                .collect(Collectors.toList());
-
-        return calculateStatistics(filteredResponses);
-    }
-
-    private StatsResource calculateStatistics(List<BrightResponse> brightResponses) {
+    public StatsResource computeStatistics(List<BrightResponse> brightResponses) {
         StatsResource statistics = new StatsResource();
 
         if (brightResponses.isEmpty()) {
@@ -182,49 +168,5 @@ public class BrightDataService {
         statistics.setStandardDeviation(roundedStandardDeviation);
 
         return statistics;
-    }
-
-    public StatsResource analyzeWeekly(List<BrightResponse> brightResponses, int week, int year) {
-        List<BrightResponse> filteredResponses = brightResponses.stream()
-                .filter(response -> {
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.setTimeInMillis(response.getSampleTime());
-                    return calendar.get(Calendar.WEEK_OF_YEAR) == week &&
-                            calendar.get(Calendar.YEAR) == year;
-                })
-                .collect(Collectors.toList());
-
-        return calculateStatistics(filteredResponses);
-    }
-
-    public StatsResource analyzeSeasonally(List<BrightResponse> brightResponses, String season, int year) {
-        List<BrightResponse> filteredResponses = brightResponses.stream()
-                .filter(response -> {
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.setTimeInMillis(response.getSampleTime());
-                    int month = calendar.get(Calendar.MONTH);
-                    int responseYear = calendar.get(Calendar.YEAR);
-
-                    return responseYear == year && isInSeason(month, season);
-                })
-                .collect(Collectors.toList());
-
-        return calculateStatistics(filteredResponses);
-    }
-
-    private boolean isInSeason(int month, String season) {
-        switch (season.toLowerCase()) {
-            case "winter":
-                return month == Calendar.DECEMBER || month == Calendar.JANUARY || month == Calendar.FEBRUARY;
-            case "spring":
-                return month == Calendar.MARCH || month == Calendar.APRIL || month == Calendar.MAY;
-            case "summer":
-                return month == Calendar.JUNE || month == Calendar.JULY || month == Calendar.AUGUST;
-            case "autumn":
-            case "fall":
-                return month == Calendar.SEPTEMBER || month == Calendar.OCTOBER || month == Calendar.NOVEMBER;
-            default:
-                return false;
-        }
     }
 }

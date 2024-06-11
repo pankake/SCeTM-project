@@ -10,6 +10,7 @@ import java.util.UUID;
 @RestController
 public class UrlController {
 	private static final String BASE_URL = "http://example.com/share/";
+	// genera un link fittizio per simulare la condivisione dei dati
 	@GetMapping("/generateUrl")
 	public String generateUrl(@RequestParam List<String> uid) {
 		String uidsString = String.join(",", uid);

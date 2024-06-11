@@ -1,12 +1,12 @@
 package com.backend.app.controller;
 
 import com.backend.app.dto.output.RoadResponse;
+import com.backend.app.dto.resource.RoadMapResource;
 import com.backend.app.service.CityFromCoordsService;
 import com.backend.app.service.QueryDBService;
 import com.backend.app.service.RoadDataService;
 import com.google.maps.errors.ApiException;
 import com.google.maps.model.LatLng;
-import com.backend.app.dto.resource.RoadMapResource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,7 +20,7 @@ public class RoadDataController {
 	@Autowired
 	RoadDataService roadDataService;
 	@Autowired
-	QueryDBService queryDbService;
+    QueryDBService queryDbService;
 	@Autowired
 	CityFromCoordsService cityFromCoordsService;
 
@@ -35,7 +35,7 @@ public class RoadDataController {
 		return roadDataService.drawMapWithColoredRoutes(coordinates, data, 20);
 	}
 
-	// rice in ingresso il nome di una città per disegnare su tutte le strade di quella città
+	// riceve in ingresso il nome di una città per disegnare su tutte le strade di quella città
 	@GetMapping("/drawAllRoadsByCity")
 	public RoadMapResource drawAllRoadsByCity(@RequestParam String city) throws IOException, InterruptedException, ApiException {
 		List<RoadResponse> data =

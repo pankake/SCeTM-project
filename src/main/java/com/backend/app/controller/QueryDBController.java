@@ -4,8 +4,8 @@ import com.backend.app.dto.output.BrightResponse;
 import com.backend.app.dto.output.RoadResponse;
 import com.backend.app.dto.output.SoundResponse;
 import com.backend.app.service.CityFromCoordsService;
-import com.google.maps.errors.ApiException;
 import com.backend.app.service.QueryDBService;
+import com.google.maps.errors.ApiException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,23 +48,22 @@ public class QueryDBController {
 		return queryDbService.filterByCity(TABLE_ROAD_DATA, RoadResponse.class, city);
 	}
 
-	@GetMapping("/soundByAreaAndTime")
-	public List<?> soundByAreaAndTime(@RequestParam Double lat, Double lng, int range, int hours, int min) throws IOException, InterruptedException, ApiException {
+	@GetMapping("/soundByAreaAndDateTime")
+	public List<?> soundByAreaAndDateTime(@RequestParam Double lat, Double lng, int range,
+									  int day, int month, int year, int hour, int min) throws IOException, InterruptedException, ApiException {
 
 		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
 
-		return queryDbService.filterByAreaAndTime(TABLE_SOUND_DATA, SoundResponse.class,
-				city, lat, lng, range, hours, min);
+		return queryDbService.filterByAreaAndPeriod(TABLE_SOUND_DATA, SoundResponse.class,
+				city, lat, lng, range, day, month, year, hour, min, "");
 	}
 
-	@GetMapping("/soundByAreaAndDate")
-	public List<?> soundByAreaAndDate(@RequestParam Double lat, Double lng, int range,
-									  int day, int month, int year) throws IOException, InterruptedException, ApiException {
+	@GetMapping("/soundByCityAndDateTime")
+	public List<?> soundByCityAndDateTime(@RequestParam String city, int day, int month, int year,
+										  int hour, int min) {
 
-		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
-
-		return queryDbService.filterByAreaAndDate(TABLE_SOUND_DATA, SoundResponse.class,
-				city, lat, lng, range, day, month, year);
+		return queryDbService.filterByCityAndPeriod(TABLE_SOUND_DATA, SoundResponse.class,
+				city, year, month, year, hour, min, "");
 	}
 
 	@GetMapping("/sound/incrementReliability")

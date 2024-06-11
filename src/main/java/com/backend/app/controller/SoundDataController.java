@@ -1,12 +1,12 @@
 package com.backend.app.controller;
 
 import com.backend.app.dto.output.SoundResponse;
+import com.backend.app.dto.resource.SoundMapResource;
+import com.backend.app.dto.resource.StatsResource;
 import com.backend.app.service.CityFromCoordsService;
 import com.backend.app.service.QueryDBService;
 import com.backend.app.service.SoundDataService;
 import com.google.maps.errors.ApiException;
-import com.backend.app.dto.resource.SoundMapResource;
-import com.backend.app.dto.resource.StatsResource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,7 +24,7 @@ public class SoundDataController {
 	@Autowired
     SoundDataService soundDataService;
 	@Autowired
-    CityFromCoordsService cityFromCoordsService;
+	CityFromCoordsService cityFromCoordsService;
 
 	@GetMapping("/drawByCity")
 	public SoundMapResource drawByCity(@RequestParam String city) throws IOException, InterruptedException, ApiException {
@@ -35,28 +35,15 @@ public class SoundDataController {
 		return soundDataService.colorSoundNearDataPoints(data);
 	}
 
-	@GetMapping("/drawByAreaAndTime")
-	public SoundMapResource drawByAreaAndTime(@RequestParam Double lat, Double lng, int range,
-											  int hours, int min) throws IOException, InterruptedException, ApiException {
+	@GetMapping("/drawByAreaAndDateTime")
+	public SoundMapResource drawByAreaAndDateTime(@RequestParam Double lat, Double lng, int range,
+											  int day, int month, int year, int hour, int min) throws IOException, InterruptedException, ApiException {
 
 		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
 
 		List<SoundResponse> data =
-				queryDbService.filterByAreaAndTime(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
-						city, lat, lng, range, hours, min);
-
-		return soundDataService.colorSoundNearDataPoints(data);
-	}
-
-	@GetMapping("/drawByAreaAndDate")
-	public SoundMapResource drawByZoneAndDate(@RequestParam Double lat, Double lng, int range,
-											  int day, int month, int year) throws IOException, InterruptedException, ApiException {
-
-		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
-
-		List<SoundResponse> data =
-				queryDbService.filterByAreaAndDate(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
-						city, lat, lng, range, day, month, year);
+				queryDbService.filterByAreaAndPeriod(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
+						city, lat, lng, range, day, month, year, hour, min, "");
 
 		return soundDataService.colorSoundNearDataPoints(data);
 	}
@@ -71,28 +58,15 @@ public class SoundDataController {
 		return soundDataService.findMinMaxSoundResponses(data);
 	}
 
-	@GetMapping("/minMaxByAreaAndTime")
-	public List<?> minMaxByAreaAndTime(@RequestParam Double lat, Double lng, int range,
-											  int hours, int min) throws IOException, InterruptedException, ApiException {
-
-		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
-
-		List<SoundResponse> data =
-				queryDbService.filterByAreaAndTime(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
-						city, lat, lng, range, hours, min);
-
-		return soundDataService.findMinMaxSoundResponses(data);
-	}
-
-	@GetMapping("/minMaxByAreaAndDate")
+	@GetMapping("/minMaxByAreaAndDateTime")
 	public List<?> minMaxByAreaAndDate(@RequestParam Double lat, Double lng, int range,
-											  int day, int month, int year) throws IOException, InterruptedException, ApiException {
+											  int day, int month, int year, int hour, int min) throws IOException, InterruptedException, ApiException {
 
 		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
 
 		List<SoundResponse> data =
-				queryDbService.filterByAreaAndDate(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
-						city, lat, lng, range, day, month, year);
+				queryDbService.filterByAreaAndPeriod(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
+						city, lat, lng, range, day, month, year, hour, min, "");
 
 		return soundDataService.findMinMaxSoundResponses(data);
 	}
@@ -101,30 +75,33 @@ public class SoundDataController {
 	public StatsResource dailyTrendAnalysis(@RequestParam String city, int day, int month, int year) {
 
 		List<SoundResponse> data =
-				(List<SoundResponse>) queryDbService
-						.filterByCity(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class, city);
+                (List<SoundResponse>) queryDbService
+                       .filterByCityAndPeriod(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
+                               city, year, month, day, -1, -1, "day");
 
-		return soundDataService.analyzeDaily(data, day, month, year);
+		return soundDataService.computeStatistics(data);
 	}
 
 	@GetMapping("/weeklyTrendAnalysis")
-	public StatsResource weeklyTrendAnalysis(@RequestParam String city, int week, int year) {
+	public StatsResource weeklyTrendAnalysis(@RequestParam String city, int day, int month, int year) {
 
 		List<SoundResponse> data =
 				(List<SoundResponse>) queryDbService
-						.filterByCity(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class, city);
+						.filterByCityAndPeriod(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
+								city, year, month, day, -1, -1, "week");
 
-		return soundDataService.analyzeWeekly(data, week, year);
+		return soundDataService.computeStatistics(data);
 	}
 
 	@GetMapping("/seasonalTrendAnalysis")
-	public StatsResource seasonalTrendAnalysis(@RequestParam String city, String season, int year) {
+	public StatsResource seasonalTrendAnalysis(@RequestParam String city, int season, int year) {
 
 		List<SoundResponse> data =
 				(List<SoundResponse>) queryDbService
-						.filterByCity(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class, city);
+						.filterByCityAndPeriod(QueryDBController.TABLE_SOUND_DATA, SoundResponse.class,
+								city, year, season, -1, -1, -1, "season");
 
-		return soundDataService.analyzeSeasonally(data, season, year);
+		return soundDataService.computeStatistics(data);
 	}
 
 	@GetMapping("/incrementReliability")

@@ -2,11 +2,11 @@ package com.backend.app.controller;
 
 import com.backend.app.dto.output.BrightResponse;
 import com.backend.app.dto.resource.BrightMapResource;
+import com.backend.app.dto.resource.StatsResource;
 import com.backend.app.service.BrightDataService;
 import com.backend.app.service.CityFromCoordsService;
 import com.backend.app.service.QueryDBService;
 import com.google.maps.errors.ApiException;
-import com.backend.app.dto.resource.StatsResource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,7 +24,7 @@ public class BrightDataController {
 	@Autowired
     BrightDataService brightDataService;
 	@Autowired
-    CityFromCoordsService cityFromCoordsService;
+	CityFromCoordsService cityFromCoordsService;
 
 	@GetMapping("/drawByCity")
 	public BrightMapResource drawByCity(@RequestParam String city) throws ApiException {
@@ -35,28 +35,15 @@ public class BrightDataController {
 		return brightDataService.colorBrightNearDataPoints(data);
 	}
 
-	@GetMapping("/drawByAreaAndTime")
-	public BrightMapResource drawByAreaAndTime(@RequestParam Double lat, Double lng, int range,
-											  int hours, int min) throws IOException, InterruptedException, ApiException {
+	@GetMapping("/drawByAreaAndDateTime")
+	public BrightMapResource drawByAreaAndDateTime(@RequestParam Double lat, Double lng, int range,
+											  int day, int month, int year, int hour, int min) throws IOException, InterruptedException, ApiException {
 
 		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
 
 		List<BrightResponse> data =
-				queryDbService.filterByAreaAndTime(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
-						city, lat, lng, range, hours, min);
-
-		return brightDataService.colorBrightNearDataPoints(data);
-	}
-
-	@GetMapping("/drawByAreaAndDate")
-	public BrightMapResource drawByZoneAndDate(@RequestParam Double lat, Double lng, int range,
-											  int day, int month, int year) throws IOException, InterruptedException, ApiException {
-
-		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
-
-		List<BrightResponse> data =
-				queryDbService.filterByAreaAndDate(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
-						city, lat, lng, range, day, month, year);
+				queryDbService.filterByAreaAndPeriod(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
+						city, lat, lng, range, day, month, year, hour, min, "");
 
 		return brightDataService.colorBrightNearDataPoints(data);
 	}
@@ -71,28 +58,15 @@ public class BrightDataController {
 		return brightDataService.findMinMaxBrightResponses(data);
 	}
 
-	@GetMapping("/minMaxByAreaAndTime")
-	public List<?> minMaxByAreaAndTime(@RequestParam Double lat, Double lng, int range,
-											  int hours, int min) throws IOException, InterruptedException, ApiException {
+	@GetMapping("/minMaxByAreaAndDateTime")
+	public List<?> minMaxByAreaAndDateTime(@RequestParam Double lat, Double lng, int range,
+											  int day, int month, int year, int hour, int min) throws IOException, InterruptedException, ApiException {
 
 		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
 
 		List<BrightResponse> data =
-				queryDbService.filterByAreaAndTime(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
-						city, lat, lng, range, hours, min);
-
-		return brightDataService.findMinMaxBrightResponses(data);
-	}
-
-	@GetMapping("/minMaxByAreaAndDate")
-	public List<?> minMaxByAreaAndDate(@RequestParam Double lat, Double lng, int range,
-											  int day, int month, int year) throws IOException, InterruptedException, ApiException {
-
-		String city = cityFromCoordsService.getCityFromCoords(lat, lng);
-
-		List<BrightResponse> data =
-				queryDbService.filterByAreaAndDate(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
-						city, lat, lng, range, day, month, year);
+				queryDbService.filterByAreaAndPeriod(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
+						city, lat, lng, range, day, month, year, hour, min, "");
 
 		return brightDataService.findMinMaxBrightResponses(data);
 	}
@@ -102,29 +76,32 @@ public class BrightDataController {
 
 		List<BrightResponse> data =
 				(List<BrightResponse>) queryDbService
-						.filterByCity(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class, city);
+						.filterByCityAndPeriod(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
+								city, year, month, day, -1, -1, "day");
 
-		return brightDataService.analyzeDaily(data, day, month, year);
+		return brightDataService.computeStatistics(data);
 	}
 
 	@GetMapping("/weeklyTrendAnalysis")
-	public StatsResource weeklyTrendAnalysis(@RequestParam String city, int week, int year) {
+	public StatsResource weeklyTrendAnalysis(@RequestParam String city, int day, int month, int year) {
 
 		List<BrightResponse> data =
 				(List<BrightResponse>) queryDbService
-						.filterByCity(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class, city);
+						.filterByCityAndPeriod(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
+								city, year, month, day, -1, -1, "week");
 
-		return brightDataService.analyzeWeekly(data, week, year);
+		return brightDataService.computeStatistics(data);
 	}
 
 	@GetMapping("/seasonalTrendAnalysis")
-	public StatsResource seasonalTrendAnalysis(@RequestParam String city, String season, int year) {
+	public StatsResource seasonalTrendAnalysis(@RequestParam String city, int season, int year) {
 
 		List<BrightResponse> data =
 				(List<BrightResponse>) queryDbService
-						.filterByCity(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class, city);
+						.filterByCityAndPeriod(QueryDBController.TABLE_BRIGHT_DATA, BrightResponse.class,
+								city, year, season, -1, -1, -1, "season");
 
-		return brightDataService.analyzeSeasonally(data, season, year);
+		return brightDataService.computeStatistics(data);
 	}
 
 	@GetMapping("/incrementReliability")

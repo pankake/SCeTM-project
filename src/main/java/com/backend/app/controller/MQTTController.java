@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/publish")
 public class MQTTController {
@@ -20,12 +22,14 @@ public class MQTTController {
 	private static final String ROAD_CONDITIONS_TOPIC = "road_conditions_topic";
 	private static final String SOUND_DATA_TOPIC = "sound_data_topic";
 	private static final String BRIGHT_DATA_TOPIC = "light_data_topic";
-	private static final String PUBLISHED_RETURN_MSG = "message Published Successfully";
+	private static final String PUBLISHED_RETURN_MSG = "Published successfully";
 	
 	@PostMapping("/road")
-	public String roadDataMessage(@RequestBody RoadRequest roadData) {
+	public String roadDataMessage(@RequestBody List<RoadRequest> roadData) {
 
-		mqttService.publish(roadData, ROAD_CONDITIONS_TOPIC);
+		for(RoadRequest data: roadData) {
+			mqttService.publish(data, ROAD_CONDITIONS_TOPIC);
+		}
 		return PUBLISHED_RETURN_MSG;
 	}
 

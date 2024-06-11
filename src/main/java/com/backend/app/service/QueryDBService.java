@@ -4,14 +4,20 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapperConfig;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression;
-import com.amazonaws.services.dynamodbv2.model.*;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.ScanRequest;
+import com.amazonaws.services.dynamodbv2.model.ScanResult;
+import com.amazonaws.services.dynamodbv2.model.UpdateItemRequest;
 import com.backend.app.dto.AppConfig;
-import com.backend.app.util.AwsConfig;
 import com.backend.app.dto.output.Response;
+import com.backend.app.util.AwsConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class QueryDBService {
@@ -78,63 +84,30 @@ public class QueryDBService {
 		return scanResult;
 	}
 
-	public <T extends Response> List<T> filterByAreaAndTime(String table, Class<T> responseType,
-															String city, Double referenceLat, Double referenceLng,
-															int maxDistanceInMeters, int hour, int minute) {
+	public <T extends Response> List<T> filterByAreaAndPeriod(String tableName, Class<T> responseType, String city,
+															  Double referenceLat, Double referenceLng, int maxDistanceInMeters,
+															  int day, int month, int year, int hour, int min, String period) {
 
-		List<T> allItems =
-				(List<T>) filterByCity(table, responseType, city);
+		List<T> allItems = (List<T>) filterByCityAndPeriod(tableName, responseType, city,
+				year, month, day, hour, min, period);
 
 		List<T> filteredItems = new ArrayList<>();
-
-		long[] timeBounds = calculateDataBoundsService.calculateTimeBounds(hour, minute);
 
 		for (T item : allItems) {
 
 			double itemLat = item.getPayload().getLat();
 			double itemLng = item.getPayload().getLng();
-			long sampleTimeMillis = item.getSampleTime();
 
-			double distance = calculateDataBoundsService.calculateDistance(referenceLat, referenceLng, itemLat, itemLng);
+			double distance = calculateDataBoundsService.calculateDistance(referenceLat,
+					referenceLng, itemLat, itemLng);
 
-			// filtra per distanza e tempo
-			if (distance <= maxDistanceInMeters &&
-					calculateDataBoundsService.isWithinTimeBounds(sampleTimeMillis, timeBounds)) {
+			// filtra per distanza in metri
+			if (distance <= maxDistanceInMeters) {
 				filteredItems.add(item);
 			}
 		}
 
-		System.out.println("filtered for timezone size: " + filteredItems.size());
-
-		return filteredItems;
-	}
-
-	public <T extends Response> List<T> filterByAreaAndDate(String tableName, Class<T> responseType, String city,
-                                                            Double referenceLat, Double referenceLng, int maxDistanceInMeters,
-                                                            int day, int month, int year) {
-
-		List<T> allItems = (List<T>) filterByCity(tableName, responseType, city);
-
-		List<T> filteredItems = new ArrayList<>();
-
-		long[] timeBounds = calculateDataBoundsService.calculateDayBounds(day, month, year);
-
-		for (T item : allItems) {
-
-			double itemLat = item.getPayload().getLat();
-			double itemLng = item.getPayload().getLng();
-			long sampleTimeMillis = item.getSampleTime();
-
-			double distance = calculateDataBoundsService.calculateDistance(referenceLat, referenceLng, itemLat, itemLng);
-
-			// filtra per distanza e giorno
-			if (distance <= maxDistanceInMeters &&
-					calculateDataBoundsService.isWithinDayBounds(sampleTimeMillis, timeBounds)) {
-				filteredItems.add(item);
-			}
-		}
-
-		System.out.println("filtered for day size: " + filteredItems.size());
+		System.out.println("filtered for distance size: " + filteredItems.size());
 
 		return filteredItems;
 	}
@@ -142,7 +115,7 @@ public class QueryDBService {
 		AmazonDynamoDB client = iotClient.getDynamoDBClient(appConfig);
 
 		for (String uid : uids) {
-			// Step 1: Scan the table to find the item with the given UID
+			// scan della tabella per trovare il record con l'uid passato come parametro
 			Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
 			expressionAttributeValues.put(":uid", new AttributeValue().withS(uid));
 
@@ -163,7 +136,7 @@ public class QueryDBService {
 			Map<String, AttributeValue> item = items.get(0);
 			String sampleTime = item.get("sample_time").getN();
 
-			// update the field of the found item
+			// aggiorna il campo del record
 			Map<String, AttributeValue> key = new HashMap<>();
 			key.put("sample_time", new AttributeValue().withN(sampleTime));
 
@@ -182,5 +155,72 @@ public class QueryDBService {
 		}
 
 		return "UpdateItem operations completed";
+	}
+
+	public List<?> filterByCityAndPeriod(String tableName, Class<?> responseClass, String city,
+										 int year, int month, int day, int hour, int minute, String period) {
+		AmazonDynamoDB client = iotClient.getDynamoDBClient(appConfig);
+
+		DynamoDBMapperConfig mapperConfig = new DynamoDBMapperConfig.Builder()
+				.withTableNameOverride(DynamoDBMapperConfig.TableNameOverride
+						.withTableNameReplacement(tableName))
+				.build();
+
+		DynamoDBMapper mapper = new DynamoDBMapper(client, mapperConfig);
+
+		// definisce i valori dell'espressione
+		Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+		expressionAttributeValues.put(":cityValue", new AttributeValue().withS(city));
+
+		// definisce i nomi degli attributi per le chiavi annidate
+		Map<String, String> expressionAttributeNames = new HashMap<>();
+		expressionAttributeNames.put("#payload", "payload");
+		expressionAttributeNames.put("#city", "city");
+
+		long[] timeBounds = getBounds(year, month, day, hour, minute, period);
+
+		// aggiunge i valori dell'espressione per l'intervallo di tempo
+		expressionAttributeValues.put(":start_time", new AttributeValue().withN(Long.toString(timeBounds[0])));
+		expressionAttributeValues.put(":end_time", new AttributeValue().withN(Long.toString(timeBounds[1])));
+
+		// definisce i nomi degli attributi per il tempo
+		expressionAttributeNames.put("#sample_time", "sample_time");
+
+		// crea l'espressione per la scansione con filtro sulla città e sul tempo
+		DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+				.withFilterExpression("#payload.#city = :cityValue AND #sample_time BETWEEN :start_time AND :end_time")
+				.withExpressionAttributeNames(expressionAttributeNames)
+				.withExpressionAttributeValues(expressionAttributeValues);
+
+		List<?> scanResult = mapper.scan(responseClass, scanExpression);
+
+		System.out.println("results size: " + scanResult.size());
+
+		for (Object item : scanResult) {
+			System.out.println(item.toString());
+		}
+		return scanResult;
+	}
+
+	private long[] getBounds(int year, int month, int day, int hour, int minute, String period) {
+		// calcola i millisecondi per l'intervallo di tempo specificato
+		long[] timeBounds;
+		switch (period.toLowerCase()) {
+			case "day":
+				timeBounds = calculateDataBoundsService.computeDayBoundsInMillis(year, month, day);
+				break;
+			case "week":
+				timeBounds = calculateDataBoundsService.computeWeekBoundsInMillis(year, month, day);
+				break;
+			case "season":
+				// in questo caso month rappresenta la stagione (1: Spring, 2: Summer, 3: Fall, 4: Winter)
+				timeBounds = calculateDataBoundsService.computeSeasonBoundsInMillis(year, month);
+				break;
+			default:
+				// default per date-time
+				timeBounds = calculateDataBoundsService.computeDateTimeBoundsInMillis(year, month, day, hour, minute);
+				break;
+		}
+		return timeBounds;
 	}
 }

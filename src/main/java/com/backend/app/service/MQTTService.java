@@ -1,9 +1,10 @@
 package com.backend.app.service;
 
-import com.google.gson.Gson;
+import com.amazonaws.services.iotdata.model.PublishRequest;
 import com.backend.app.dto.AppConfig;
 import com.backend.app.dto.input.Request;
 import com.backend.app.util.AwsConfig;
+import com.google.gson.Gson;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 
@@ -23,10 +24,12 @@ public class MQTTService {
 	public void publish(Request publishDTO, String topic) {
 
 		ByteBuffer bb = StandardCharsets.UTF_8.encode(gson.toJson(publishDTO));
-		com.amazonaws.services.iotdata.model.PublishRequest publishRequest = new com.amazonaws.services.iotdata.model.PublishRequest();
+		PublishRequest publishRequest =	new PublishRequest();
+
 		publishRequest.withPayload(bb);
 		publishRequest.withTopic(topic);
-		publishRequest.setQos(0);
+		publishRequest.setQos(1); // QoS 1: "almeno una volta"
+
 		iotClient.getIotDataClient(appConfig).publish(publishRequest);
 		System.out.println("message Published successfully");
 	}
